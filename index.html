@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SDGs 不塑永續-淨灘</title>
+<style>
+:root{
+  --sand:#F2D8A7;
+  --ocean:#6CC8E7;
+  --sky:#AEE9FF;
+  --accent:#0b6b3a;
+}
+html,body{height:100%;margin:0;font-family:"Noto Sans TC","Apple SD Gothic Neo",system-ui,sans-serif;}
+body{
+  background: linear-gradient(to bottom, var(--sky) 0%, var(--ocean) 45%, #85d5ff 50%) fixed;
+  overflow:hidden;
+  position:relative;
+}
+header{
+  position:fixed;
+  top:14px;
+  left:18px;
+  font-weight:900;
+  font-size:1.6rem;
+  color: #08331f;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+  z-index:2000;
+}
+.scoreboard{
+  position:fixed;
+  top:10px;
+  right:18px;
+  z-index:2000;
+  text-align:right;
+  background: rgba(255,255,255,0.6);
+  padding:8px 12px;
+  border-radius:10px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+}
+.scoreboard .score{font-weight:700; font-size:1.15rem; color: #0b6b3a;}
+.scoreboard .sub{font-size:0.85rem; color:#333; margin-top:2px;}
+
+.beach{
+  position:absolute;
+  left:0; right:0;
+  bottom:0;
+  height:48vh;
+  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, var(--sand) 100%);
+  box-shadow: inset 0 8px 30px rgba(0,0,0,0.06);
+  border-top-left-radius: 40% 8vh;
+  border-top-right-radius: 40% 8vh;
+  z-index:500;
+}
+
+/* 垃圾層 */
+#trashLayer{
+  position:absolute;
+  left:0; right:0;
+  bottom:0;
+  height:48vh; /* 與沙灘高度一致 */
+  pointer-events:none;
+  overflow:visible;
+  z-index:1000;
+}
+
+.trash{
+  position:absolute;
+  pointer-events:auto;
+  user-select:none;
+  cursor:pointer;
+  transition: transform 350ms ease, opacity 300ms ease;
+  transform-origin: center center;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));
+}
+.trash .icon{display:block;width:100%;height:100%;}
+.picked{
+  transform: scale(0.25) rotate(0deg) translateY(20px);
+  opacity:0;
+}
+
+.overlay{
+  position:fixed; inset:0;
+  background: linear-gradient(180deg, rgba(5,10,10,0.2), rgba(5,10,10,0.45));
+  display:flex; align-items:center; justify-content:center;
+  z-index:3000;
+  color:white; font-size:1.6rem; text-align:center;
+  visibility:hidden; opacity:0;
+  transition: opacity 300ms ease, visibility 0s linear 300ms;
+}
+.overlay.show{visibility:visible; opacity:1; transition-delay:0s;}
+.overlay .card{
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+  border-radius:14px;
+  padding:28px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  backdrop-filter: blur(6px);
+  min-width:320px;
+}
+.overlay h1{margin:0 0 8px 0;font-size:2.2rem;color:#fffa;}
+.overlay p{margin:6px 0 14px 0; color:#e8ffe8;}
+.btn{display:inline-block;padding:10px 16px;border-radius:10px;background:#0b6b3a;color:white;font-weight:700;text-decoration:none;cursor:pointer;border:0;}
+
+.hint{
+  position:fixed; left:18px; bottom:18px; z-index:2000;
+  background: rgba(255,255,255,0.75);
+  padding:8px 12px;
+  border-radius:10px;
+  font-size:0.9rem;
+  color:#111;
+  box-shadow: 0 5px 12px rgba(0,0,0,0.12);
+}
+
+.legend{
+  position:fixed; right:18px; bottom:18px; z-index:2000;
+  background: rgba(255,255,255,0.75);
+  padding:8px 12px; border-radius:10px; font-size:0.9rem; color:#111;
+  box-shadow: 0 5px 12px rgba(0,0,0,0.12);
+}
+
+@media(max-width:420px){header{font-size:1.2rem; top:10px; left:10px;} .scoreboard{top:8px; right:8px; padding:6px 10px;} .overlay h1{font-size:1.8rem;}}
+</style>
+</head>
+<body>
+<header>SDGs 不塑永續-淨灘</header>
+<div class="scoreboard" aria-live="polite">
+  <div class="score">分數：<span id="score">0</span></div>
+  <div class="sub">已撿：<span id="pickedCount">0</span>/<span id="totalCount">50</span></div>
+</div>
+
+<div id="trashLayer"></div>
+<div class="beach"></div>
+
+<div class="hint">點選海灘上的垃圾取得分數。大小不同，分數不同。</div>
+<div class="legend">小:5 分 • 中:10 分 • 大:20 分</div>
+
+<div class="overlay" id="overlay">
+  <div class="card">
+    <h1>任務成功 🎉</h1>
+    <p id="finalText">你已清理完所有垃圾！總分：<strong id="finalScore">0</strong></p>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button class="btn" id="nextBtn">前往下一關</button>
+      <button class="btn" id="retryBtn" style="background:#a85d2a">重玩此關</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOTAL_TRASH=50;
+const trashLayer=document.getElementById('trashLayer');
+const scoreEl=document.getElementById('score');
+const pickedCountEl=document.getElementById('pickedCount');
+const totalCountEl=document.getElementById('totalCount');
+const overlay=document.getElementById('overlay');
+const finalScoreEl=document.getElementById('finalScore');
+totalCountEl.textContent=TOTAL_TRASH;
+
+let score=0, picked=0;
+const SIZE_POINTS={small:5, medium:10, large:20};
+
+// 簡單示意 SVG
+function svgBottle(){return `<svg viewBox="0 0 64 64"><g transform="translate(12,6)"><rect x="10" y="2" width="12" height="6" rx="1.5" fill="#bde6ff"/><rect x="8" y="8" width="16" height="38" rx="4" fill="#cfefff"/><path d="M8 22 C16 30 16 30 24 22" fill="#bfe6ff" opacity="0.9"/><rect x="10" y="44" width="12" height="6" rx="2" fill="#9fd0ff"/></g></svg>`;}
+function svgPaper(){return `<svg viewBox="0 0 64 64"><g transform="translate(6,6)"><rect x="2" y="2" width="44" height="52" rx="3" fill="#fff7ea" stroke="#f0d9b0"/><rect x="8" y="10" width="30" height="4" rx="1" fill="#f0d0a0"/><rect x="8" y="18" width="22" height="3" rx="1" fill="#f0d0a0"/></g></svg>`;}
+function svgBox(){return `<svg viewBox="0 0 64 64"><g transform="translate(6,8)"><rect x="2" y="6" width="44" height="34" rx="3" fill="#fff" stroke="#e0cba8"/><path d="M2 6 L24 0 L46 6" fill="#f6e9d6"/><line x1="24" y1="0" x2="24" y2="40" stroke="#d6b98e" stroke-width="2"/></g></svg>`;}
+
+const ICONS=[svgBottle,svgPaper,svgBox];
+
+function spawnTrash(n){
+  trashLayer.innerHTML='';
+  for(let i=0;i<n;i++){
+    const el=document.createElement('div');
+    el.className='trash';
+    const icon=ICONS[Math.floor(Math.random()*ICONS.length)];
+    const sizeKey=randomSize();
+    let sizePx=sizeKey==='small'?randInt(28,36):sizeKey==='medium'?randInt(42,56):randInt(68,88);
+    el.style.width=el.style.height=sizePx+'px';
+    el.style.left=(Math.random()*85+5)+'%';
+    el.style.top=(Math.random()*80+10)+'%'; // 相對於容器
+    const rot=Math.floor(Math.random()*360);
+    el.style.transform=`rotate(${rot}deg)`;
+    el.dataset.size=sizeKey;
+    el.dataset.points=SIZE_POINTS[sizeKey];
+    el.innerHTML=`<div class="icon">${icon()}</div>`;
+    el.addEventListener('click',()=>pickTrash(el));
+    trashLayer.appendChild(el);
+  }
+}
+
+function pickTrash(el){
+  if(el.classList.contains('picked')) return;
+  score+=parseInt(el.dataset.points);
+  picked+=1;
+  el.classList.add('picked');
+  setTimeout(()=>el.remove(),350);
+  updateHUD();
+  if(picked>=TOTAL_TRASH) setTimeout(showSuccess,400);
+}
+
+function updateHUD(){scoreEl.textContent=score; pickedCountEl.textContent=picked;}
+
+function showSuccess(){finalScoreEl.textContent=score; overlay.classList.add('show');}
+
+function resetGame(){score=picked=0; updateHUD(); overlay.classList.remove('show'); spawnTrash(TOTAL_TRASH);}
+
+document.getElementById('nextBtn').addEventListener('click',resetGame);
+document.getElementById('retryBtn').addEventListener('click',resetGame);
+
+function randInt(a,b){return Math.floor(Math.random()*(b-a+1))+a;}
+function randomSize(){const r=Math.random(); return r<0.45?'small':r<0.85?'medium':'large';}
+
+spawnTrash(TOTAL_TRASH);
+</script>
+</body>
+</html>
